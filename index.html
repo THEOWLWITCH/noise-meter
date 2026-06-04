@@ -278,6 +278,10 @@
         <option value="school">🏫 סטנדרטי – צלצול בית ספר</option>
         <option value="harsh">🚨 צורמני – אזעקה</option>
         <option value="beep">📢 ביפ כפול</option>
+        <option value="mario">🍄 מריו – קפיצה</option>
+        <option value="fanfare">🎺 פנפרה ניצחון</option>
+        <option value="cuckoo">🐦 קוקייה</option>
+        <option value="dance">🕺 ריתמי – דיסקו</option>
       </select>
     </div>
   </div>
@@ -503,6 +507,110 @@
             osc.stop(t0 + 0.26);
             oscs.push(osc);
           });
+        }
+      }
+
+      } else if (type === 'mario') {
+        // Super Mario jump sound + coin motif, repeated
+        const notes = [
+          [660,0],[660,0.1],[660,0.2],[510,0.33],[660,0.43],[770,0.56],[380,0.7]
+        ];
+        const patLen = 0.9;
+        const repeats = Math.max(1, Math.ceil(totalDur / patLen));
+        for (let r = 0; r < repeats; r++) {
+          notes.forEach(([freq, d]) => {
+            const t0 = now + r * patLen + d;
+            if (t0 - now >= totalDur) return;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0.35, t0);
+            g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
+            osc.connect(g); g.connect(master);
+            osc.start(t0); osc.stop(t0 + 0.09);
+            oscs.push(osc);
+          });
+        }
+
+      } else if (type === 'fanfare') {
+        // Classic victory fanfare: Sol Sol Sol Mi-Sol
+        const fanNotes = [
+          [392,0,0.15],[392,0.18,0.15],[392,0.36,0.15],
+          [311,0.54,0.1],[466,0.67,0.35]
+        ];
+        const patLen = 1.1;
+        const repeats = Math.max(1, Math.ceil(totalDur / patLen));
+        for (let r = 0; r < repeats; r++) {
+          fanNotes.forEach(([freq, d, dur]) => {
+            const t0 = now + r * patLen + d;
+            if (t0 - now >= totalDur) return;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0.5, t0);
+            g.gain.setValueAtTime(0.5, t0 + dur - 0.02);
+            g.gain.linearRampToValueAtTime(0, t0 + dur);
+            osc.connect(g); g.connect(master);
+            osc.start(t0); osc.stop(t0 + dur + 0.01);
+            oscs.push(osc);
+          });
+        }
+
+      } else if (type === 'cuckoo') {
+        // Cuckoo: two descending notes G5→E5, repeated
+        const patLen = 1.0;
+        const repeats = Math.max(1, Math.ceil(totalDur / patLen));
+        for (let r = 0; r < repeats; r++) {
+          [[784,0],[622,0.3]].forEach(([freq, d]) => {
+            const t0 = now + r * patLen + d;
+            if (t0 - now >= totalDur) return;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0, t0);
+            g.gain.linearRampToValueAtTime(0.6, t0 + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25);
+            osc.connect(g); g.connect(master);
+            osc.start(t0); osc.stop(t0 + 0.26);
+            oscs.push(osc);
+          });
+        }
+
+      } else if (type === 'dance') {
+        // Disco: punchy 4-on-the-floor kick-like pattern + melody
+        const beat = 0.25; // 240 BPM quarter note
+        const melody = [523,0,587,0,659,523,698,0]; // C D E C F –
+        const totalBeats = Math.max(8, Math.floor(totalDur / beat));
+        for (let i = 0; i < totalBeats; i++) {
+          const t0 = now + i * beat;
+          if (t0 - now >= totalDur) break;
+          // Kick (low thump)
+          const kick = ctx.createOscillator();
+          const kg = ctx.createGain();
+          kick.type = 'sine';
+          kick.frequency.setValueAtTime(180, t0);
+          kick.frequency.exponentialRampToValueAtTime(40, t0 + 0.15);
+          kg.gain.setValueAtTime(0.6, t0);
+          kg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+          kick.connect(kg); kg.connect(master);
+          kick.start(t0); kick.stop(t0 + 0.2);
+          oscs.push(kick);
+          // Melody note every beat
+          const mFreq = melody[i % melody.length];
+          if (mFreq) {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.value = mFreq;
+            g.gain.setValueAtTime(0.2, t0);
+            g.gain.exponentialRampToValueAtTime(0.001, t0 + beat * 0.8);
+            osc.connect(g); g.connect(master);
+            osc.start(t0); osc.stop(t0 + beat * 0.85);
+            oscs.push(osc);
+          }
         }
       }
 
