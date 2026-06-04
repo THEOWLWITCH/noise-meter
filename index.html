@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <meta name="description" content="מד רעש לכיתה - מתריע כשיש יותר מדי רעש" />
+  <title>מד רעש לכיתה</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      gap: 20px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      color: #a78bfa;
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    /* Meter circle */
+    .meter-wrap {
+      position: relative;
+      width: 220px;
+      height: 220px;
+    }
+
+    #meter-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+
+    #meter-bg { fill: none; stroke: #2d2d4e; stroke-width: 18; }
+    #meter-bar {
+      fill: none;
+      stroke: #4ade80;
+      stroke-width: 18;
+      stroke-linecap: round;
+      stroke-dasharray: 565;
+      stroke-dashoffset: 565;
+      transition: stroke-dashoffset 0.15s, stroke 0.3s;
+    }
+
+    .meter-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    #db-value {
+      font-size: 2.6rem;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1;
+    }
+
+    #db-label { font-size: 0.85rem; color: #aaa; }
+
+    /* Status badge */
+    #status-badge {
+      padding: 8px 24px;
+      border-radius: 999px;
+      font-size: 1rem;
+      font-weight: 600;
+      background: #22c55e22;
+      color: #4ade80;
+      border: 1.5px solid #4ade80;
+      transition: all 0.3s;
+      text-align: center;
+    }
+
+    #status-badge.warning {
+      background: #f59e0b22;
+      color: #fbbf24;
+      border-color: #fbbf24;
+    }
+
+    #status-badge.alert {
+      background: #ef444422;
+      color: #f87171;
+      border-color: #f87171;
+      animation: pulse 0.6s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { opacity: 1; transform: scale(1); }
+      to   { opacity: 0.7; transform: scale(1.04); }
+    }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 28px;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+
+    button:active { transform: scale(0.95); }
+
+    #btn-start {
+      background: #6d28d9;
+      color: #fff;
+    }
+
+    #btn-start.running {
+      background: #b91c1c;
+    }
+
+    #btn-test {
+      background: #0f4c81;
+      color: #fff;
+    }
+
+    /* Settings card */
+    .card {
+      background: #16213e;
+      border-radius: 18px;
+      padding: 20px 24px;
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      color: #a78bfa;
+      margin-bottom: 2px;
+    }
+
+    .setting {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .setting label {
+      font-size: 0.9rem;
+      color: #bbb;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .setting label span {
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: #7c3aed;
+      height: 6px;
+      cursor: pointer;
+    }
+
+    select {
+      background: #2d2d4e;
+      color: #eee;
+      border: 1.5px solid #4a4a6e;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    /* Noise history bar */
+    #history-bar {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 50px;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .h-seg {
+      flex: 1;
+      border-radius: 3px 3px 0 0;
+      min-height: 4px;
+      transition: height 0.15s, background 0.3s;
+      background: #4ade80;
+    }
+
+    footer {
+      font-size: 0.75rem;
+      color: #555;
+      text-align: center;
+      margin-top: auto;
+      padding-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🔊 מד רעש לכיתה</h1>
+
+  <div class="meter-wrap">
+    <svg id="meter-svg" viewBox="0 0 200 200">
+      <circle id="meter-bg" cx="100" cy="100" r="90"/>
+      <circle id="meter-bar" cx="100" cy="100" r="90"/>
+    </svg>
+    <div class="meter-center">
+      <div id="db-value">--</div>
+      <div id="db-label">דציבל</div>
+    </div>
+  </div>
+
+  <div id="status-badge">לחץ התחל למדידה</div>
+
+  <div class="btn-row">
+    <button id="btn-start">▶ התחל</button>
+    <button id="btn-test">🔔 בדוק צליל</button>
+  </div>
+
+  <!-- History mini chart -->
+  <div id="history-bar"></div>
+
+  <!-- Settings -->
+  <div class="card">
+    <h2>⚙️ הגדרות</h2>
+
+    <div class="setting">
+      <label>רמת רעש להתראה <span id="lbl-threshold">65 dB</span></label>
+      <input type="range" id="threshold" min="40" max="100" value="65" step="1" />
+    </div>
+
+    <div class="setting">
+      <label>משך זמן רעש לפני התראה <span id="lbl-duration">2 דקות</span></label>
+      <input type="range" id="duration" min="1" max="10" value="4" step="1" />
+      <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#666;margin-top:2px;">
+        <span>30 שנ'</span><span>5 דקות</span>
+      </div>
+    </div>
+
+    <div class="setting">
+      <label>משך ההתראה <span id="lbl-alert-dur">3 שניות</span></label>
+      <input type="range" id="alert-dur" min="1" max="36" value="3" step="1" />
+      <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#666;margin-top:2px;">
+        <span>5 שנ'</span><span>3 דקות</span>
+      </div>
+    </div>
+
+    <div class="setting">
+      <label>עוצמת צליל ההתראה <span id="lbl-volume">70%</span></label>
+      <input type="range" id="volume" min="0" max="100" value="70" step="5" />
+    </div>
+
+    <div class="setting">
+      <label>סוג צליל ההתראה</label>
+      <select id="sound-type">
+        <option value="pleasant">🎵 נעים – פעמון</option>
+        <option value="school">🏫 סטנדרטי – צלצול בית ספר</option>
+        <option value="harsh">🚨 צורמני – אזעקה</option>
+        <option value="beep">📢 ביפ כפול</option>
+      </select>
+    </div>
+  </div>
+
+  <footer>מד רעש לכיתה · PWA · Web Audio API</footer>
+
+  <script>
+    // ─── State ───────────────────────────────────────────────
+    let audioCtx = null;
+    let analyser = null;
+    let micStream = null;
+    let animId = null;
+    let running = false;
+
+    let noiseStartTime = null;   // when current noise-over-threshold started
+    let alertCooldown = false;   // prevent repeated alerts
+    const COOLDOWN_MS = 4000;
+
+    // Settings (live)
+    const cfg = {
+      threshold: 65,
+      duration: 120,   // seconds (4 steps × 30s)
+      alertDur: 3,     // seconds the alert sound plays
+      volume: 0.70,
+      soundType: 'pleasant'
+    };
+
+    // History ring buffer (60 samples)
+    const HISTORY_LEN = 60;
+    const history = new Array(HISTORY_LEN).fill(0);
+    let histIdx = 0;
+
+    // ─── DOM refs ────────────────────────────────────────────
+    const meterBar   = document.getElementById('meter-bar');
+    const dbValue    = document.getElementById('db-value');
+    const statusBadge = document.getElementById('status-badge');
+    const btnStart   = document.getElementById('btn-start');
+    const btnTest    = document.getElementById('btn-test');
+    const histBar    = document.getElementById('history-bar');
+
+    // Build history segments
+    for (let i = 0; i < HISTORY_LEN; i++) {
+      const seg = document.createElement('div');
+      seg.className = 'h-seg';
+      histBar.appendChild(seg);
+    }
+    const hSegs = histBar.querySelectorAll('.h-seg');
+
+    // ─── Settings wiring ─────────────────────────────────────
+    function wire(id, key, label, fmt) {
+      const el = document.getElementById(id);
+      el.addEventListener('input', () => {
+        cfg[key] = parseFloat(el.value);
+        document.getElementById(label).textContent = fmt(cfg[key]);
+      });
+    }
+
+    function fmtDuration(steps) {
+      const secs = steps * 30;
+      if (secs < 60) return `${secs} שניות`;
+      const m = Math.floor(secs / 60), s = secs % 60;
+      return s ? `${m}:${String(s).padStart(2,'0')} דקות` : `${m} דקות`;
+    }
+
+    function fmtSecs(s) {
+      if (s < 60) return `${s} שניות`;
+      const m = Math.floor(s / 60), r = s % 60;
+      return r ? `${m}:${String(r).padStart(2,'0')} דקות` : `${m} דקות`;
+    }
+
+    wire('threshold', 'threshold', 'lbl-threshold', v => `${v} dB`);
+
+    // alert-dur: each slider step = 5 seconds
+    document.getElementById('alert-dur').addEventListener('input', e => {
+      cfg.alertDur = parseInt(e.target.value) * 5;
+      document.getElementById('lbl-alert-dur').textContent = fmtSecs(cfg.alertDur);
+    });
+    cfg.alertDur = parseInt(document.getElementById('alert-dur').value) * 5;
+    document.getElementById('lbl-alert-dur').textContent = fmtSecs(cfg.alertDur);
+    wire('volume',    'volume',    'lbl-volume',     v => `${Math.round(v)}%`);
+
+    // duration slider: each step = 30 seconds
+    document.getElementById('duration').addEventListener('input', e => {
+      cfg.duration = parseInt(e.target.value) * 30;
+      document.getElementById('lbl-duration').textContent = fmtDuration(parseInt(e.target.value));
+    });
+
+    // volume slider stores 0-100, convert to 0-1
+    document.getElementById('volume').addEventListener('input', e => {
+      cfg.volume = parseInt(e.target.value) / 100;
+    });
+    cfg.volume = parseInt(document.getElementById('volume').value) / 100;
+
+    document.getElementById('sound-type').addEventListener('change', e => {
+      cfg.soundType = e.target.value;
+    });
+
+    // ─── Audio helpers ───────────────────────────────────────
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    // Convert analyser float data to approximate dB SPL (calibrated loosely)
+    function calcDb(dataArray) {
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
+      const rms = Math.sqrt(sum / dataArray.length);
+      if (rms === 0) return 0;
+      // Map: rms ~0.001 → ~40 dB, rms ~1 → ~90 dB
+      return Math.min(100, Math.max(0, 20 * Math.log10(rms) + 90));
+    }
+
+    // ─── Sound synthesis ─────────────────────────────────────
+    let alertStopFn = null; // to cut off a playing alert early
+
+    function playAlert() {
+      if (alertStopFn) { alertStopFn(); alertStopFn = null; }
+
+      const ctx = getAudioCtx();
+      // Scale 0-1 → 0-3 so even 50% is clearly audible
+      const vol = cfg.volume * 3.0;
+      const totalDur = cfg.alertDur;
+      const type = cfg.soundType;
+      const now = ctx.currentTime;
+
+      // Compressor prevents clipping at high gain
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -6;
+      comp.knee.value = 3;
+      comp.ratio.value = 8;
+      comp.attack.value = 0.002;
+      comp.release.value = 0.1;
+      comp.connect(ctx.destination);
+
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(vol, now);
+      master.connect(comp);
+
+      const oscs = [];
+
+      if (type === 'pleasant') {
+        // Repeat bell chord to fill alertDur
+        const chordLen = 1.35;
+        const repeats = Math.max(1, Math.ceil(totalDur / chordLen));
+        for (let r = 0; r < repeats; r++) {
+          const offset = r * chordLen;
+          if (offset >= totalDur) break;
+          [[523, 0], [659, 0.05], [784, 0.1]].forEach(([freq, d]) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const t0 = now + offset + d;
+            g.gain.setValueAtTime(0, t0);
+            g.gain.linearRampToValueAtTime(0.4, t0 + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, t0 + 1.2);
+            osc.connect(g); g.connect(master);
+            osc.start(t0);
+            osc.stop(t0 + 1.3);
+            oscs.push(osc);
+          });
+        }
+
+      } else if (type === 'school') {
+        // Repeat bursts across alertDur
+        const burstLen = 0.4;
+        const totalBursts = Math.max(3, Math.floor(totalDur / burstLen));
+        for (let i = 0; i < totalBursts; i++) {
+          const t0 = now + i * burstLen;
+          if (t0 - now >= totalDur) break;
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.value = 880;
+          g.gain.setValueAtTime(0.3, t0);
+          g.gain.setValueAtTime(0, t0 + 0.25);
+          osc.connect(g); g.connect(master);
+          osc.start(t0);
+          osc.stop(t0 + 0.26);
+          oscs.push(osc);
+        }
+
+      } else if (type === 'harsh') {
+        // Repeating siren for alertDur
+        const sweepLen = 1.0;
+        const repeats = Math.max(1, Math.ceil(totalDur / sweepLen));
+        for (let r = 0; r < repeats; r++) {
+          const t0 = now + r * sweepLen;
+          if (t0 - now >= totalDur) break;
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(400, t0);
+          osc.frequency.linearRampToValueAtTime(1200, t0 + sweepLen * 0.5);
+          osc.frequency.linearRampToValueAtTime(400, t0 + sweepLen);
+          g.gain.setValueAtTime(0.5, t0);
+          g.gain.setValueAtTime(0.5, t0 + sweepLen - 0.05);
+          g.gain.setValueAtTime(0, t0 + sweepLen);
+          osc.connect(g); g.connect(master);
+          osc.start(t0);
+          osc.stop(t0 + sweepLen + 0.05);
+          oscs.push(osc);
+        }
+
+      } else if (type === 'beep') {
+        // Repeating double-beeps
+        const pairLen = 0.8;
+        const repeats = Math.max(1, Math.ceil(totalDur / pairLen));
+        for (let r = 0; r < repeats; r++) {
+          [0, 0.35].forEach(d => {
+            const t0 = now + r * pairLen + d;
+            if (t0 - now >= totalDur) return;
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.value = 1000;
+            g.gain.setValueAtTime(0.5, t0);
+            g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25);
+            osc.connect(g); g.connect(master);
+            osc.start(t0);
+            osc.stop(t0 + 0.26);
+            oscs.push(osc);
+          });
+        }
+      }
+
+      // Fade out at end
+      master.gain.setValueAtTime(vol, now + totalDur - 0.1);
+      master.gain.linearRampToValueAtTime(0, now + totalDur);
+
+      alertStopFn = () => {
+        try { oscs.forEach(o => o.stop()); } catch(e) {}
+        master.gain.cancelScheduledValues(ctx.currentTime);
+        master.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.05);
+      };
+      setTimeout(() => { alertStopFn = null; }, (totalDur + 0.2) * 1000);
+    }
+
+    // ─── Meter update ─────────────────────────────────────────
+    const CIRCUMFERENCE = 2 * Math.PI * 90; // ≈ 565.5
+
+    function updateMeter(db) {
+      // Arc fill
+      const pct = Math.min(db / 100, 1);
+      meterBar.style.strokeDashoffset = CIRCUMFERENCE * (1 - pct);
+
+      // Color
+      const color = db < cfg.threshold * 0.8 ? '#4ade80'
+                  : db < cfg.threshold        ? '#fbbf24'
+                                               : '#f87171';
+      meterBar.style.stroke = color;
+
+      // Number
+      dbValue.textContent = Math.round(db);
+
+      // History
+      history[histIdx % HISTORY_LEN] = db;
+      histIdx++;
+      const maxDb = Math.max(...history, 1);
+      hSegs.forEach((seg, i) => {
+        const val = history[(histIdx - HISTORY_LEN + i + HISTORY_LEN) % HISTORY_LEN];
+        const h = Math.max(4, (val / 100) * 50);
+        seg.style.height = h + 'px';
+        seg.style.background = val < cfg.threshold * 0.8 ? '#4ade8088'
+                             : val < cfg.threshold        ? '#fbbf2488'
+                                                          : '#f8717188';
+      });
+    }
+
+    // ─── Alert logic ──────────────────────────────────────────
+    function checkAlert(db, now) {
+      if (db >= cfg.threshold) {
+        if (!noiseStartTime) noiseStartTime = now;
+        const elapsed = (now - noiseStartTime) / 1000;
+        const remaining = Math.max(0, cfg.duration - elapsed);
+
+        if (elapsed >= cfg.duration && !alertCooldown) {
+          // FIRE ALERT
+          playAlert();
+          alertCooldown = true;
+          const cooldown = (cfg.alertDur + 1) * 1000;
+          setTimeout(() => { alertCooldown = false; noiseStartTime = null; }, cooldown);
+          statusBadge.className = 'alert';
+          statusBadge.textContent = '🚨 יותר מדי רעש!';
+        } else if (!alertCooldown) {
+          statusBadge.className = 'warning';
+          const rem = Math.ceil(remaining);
+          const remTxt = rem >= 60
+            ? `${Math.floor(rem/60)}:${String(rem%60).padStart(2,'0')} דקות`
+            : `${rem} שניות`;
+          statusBadge.textContent = `⚠️ רעש גבוה... ${remTxt}`;
+        }
+      } else {
+        noiseStartTime = null;
+        if (!alertCooldown) {
+          statusBadge.className = '';
+          statusBadge.textContent = '✅ רמת רעש תקינה';
+        }
+      }
+    }
+
+    // ─── Main loop ────────────────────────────────────────────
+    const dataArray = new Float32Array(1024);
+
+    function loop() {
+      animId = requestAnimationFrame(loop);
+      analyser.getFloatTimeDomainData(dataArray);
+      const db = calcDb(dataArray);
+      updateMeter(db);
+      checkAlert(db, Date.now());
+    }
+
+    // ─── Start / Stop ─────────────────────────────────────────
+    async function startMeasuring() {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const ctx = getAudioCtx();
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 2048;
+        const src = ctx.createMediaStreamSource(micStream);
+        src.connect(analyser);
+        running = true;
+        btnStart.textContent = '⏹ עצור';
+        btnStart.classList.add('running');
+        statusBadge.textContent = '✅ רמת רעש תקינה';
+        loop();
+      } catch (e) {
+        alert('לא ניתן לגשת למיקרופון.\nאנא אשר גישה ונסה שנית.');
+      }
+    }
+
+    function stopMeasuring() {
+      if (animId) cancelAnimationFrame(animId);
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      running = false;
+      btnStart.textContent = '▶ התחל';
+      btnStart.classList.remove('running');
+      statusBadge.className = '';
+      statusBadge.textContent = 'לחץ התחל למדידה';
+      dbValue.textContent = '--';
+      meterBar.style.strokeDashoffset = CIRCUMFERENCE;
+      noiseStartTime = null;
+    }
+
+    btnStart.addEventListener('click', () => {
+      if (running) stopMeasuring(); else startMeasuring();
+    });
+
+    btnTest.addEventListener('click', () => {
+      getAudioCtx(); // resume context
+      playAlert();
+    });
+
+    // ─── PWA install prompt ───────────────────────────────────
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.createElement('button');
+      btn.textContent = '📲 התקן אפליקציה';
+      btn.style.cssText = 'background:#065f46;color:#fff;margin-top:4px;';
+      btn.onclick = () => { deferredPrompt.prompt(); btn.remove(); };
+      document.querySelector('.btn-row').appendChild(btn);
+    });
+  </script>
+</body>
+</html>
